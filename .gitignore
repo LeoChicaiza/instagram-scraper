@@ -2,14 +2,20 @@
 __pycache__/
 *.py[cod]
 *.pyo
-.venv/
-venv/
+*.pyd
+.Python
 env/
+venv/
+.venv/
+*.egg-info/
+dist/
+build/
 
-# Datos extraídos — nunca subir al repo
-data/*.json
+# Datos extraídos (no subir al repo)
+data/
+*.json
 
-# Sesiones/cookies de Instagram — NUNCA subir
+# Sesiones de Instagram (nunca subir)
 session_*
 *.session
 cookies.txt
@@ -18,6 +24,7 @@ cookies.txt
 .vscode/
 .idea/
 *.swp
+*.swo
 
 # OS
 .DS_Store

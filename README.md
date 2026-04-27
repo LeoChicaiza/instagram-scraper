@@ -1,169 +1,60 @@
-# 📸 InstaScope — Instagram Scraper sin API oficial
+# 📸 InstaScope — Instagram Profile Scraper
 
-> **Proyecto educativo** de web scraping sobre perfiles públicos de Instagram usando únicamente peticiones HTTP puras con `requests`. Sin Selenium, sin BeautifulSoup, sin librerías de automatización.
+> Herramienta educativa para extracción de datos de perfiles públicos de Instagram sin usar la API oficial.
 
-![Python](https://img.shields.io/badge/Python-3.8+-3776AB?logo=python&logoColor=white)
-![Requests](https://img.shields.io/badge/requests-2.x-orange)
-![Flask](https://img.shields.io/badge/Flask-3.x-black?logo=flask)
-![Sin API](https://img.shields.io/badge/API%20oficial-NO%20usada-red)
-
----
-
-## 📋 Tabla de contenidos
-
-1. [¿Cómo funciona el scraping?](#-cómo-funciona-el-scraping)
-2. [Análisis de solicitudes web](#-análisis-de-solicitudes-web)
-3. [Estrategia anti-bloqueo](#-estrategia-anti-bloqueo)
-4. [Estructura del proyecto](#-estructura-del-proyecto)
-5. [Instalación y uso](#-instalación-y-uso)
-6. [API endpoints](#-api-endpoints)
-7. [Desafíos encontrados](#-desafíos-encontrados)
-8. [Aviso legal](#️-aviso-legal)
+![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python) ![Flask](https://img.shields.io/badge/Flask-3.x-black?logo=flask) ![Instaloader](https://img.shields.io/badge/Instaloader-4.x-orange) ![License](https://img.shields.io/badge/Licencia-Educativa-green)
 
 ---
 
 ## 🧠 ¿Cómo funciona el scraping?
 
-### Principio fundamental
+### Método: Instaloader + HTTP directo
 
-Instagram es una Single Page Application (SPA). Cuando visitas un perfil en el navegador, Chrome realiza varias peticiones HTTP en segundo plano para traer los datos en formato JSON. **Este scraper replica exactamente esas mismas peticiones**, sin automatizar un navegador.
+Esta herramienta utiliza **[Instaloader](https://instaloader.github.io/)**, una librería Python que replica las peticiones HTTP que hace el navegador web de Instagram, sin usar la API oficial de Meta.
 
-La diferencia con Selenium o BeautifulSoup es fundamental:
-- **Selenium**: lanza un navegador real y lo controla → pesado, lento, detectable
-- **BeautifulSoup**: parsea HTML estático → no sirve para SPAs con JS
-- **Este proyecto**: envía peticiones HTTP directas, igual que `curl` → ligero, rápido, comprensible
-
-### Flujo completo de extracción
+### Flujo de extracción
 
 ```
-[1] Crear sesión HTTP
-        │  requests.Session() — mantiene cookies entre peticiones
-        │  headers idénticos a Chrome 120
+Usuario ingresa @username
+        │
         ▼
-[2] Obtener CSRF token
-        │  GET https://www.instagram.com/
-        │  Instagram setea 'csrftoken' en las cookies de respuesta
-        │  Lo extraemos y lo añadimos al header X-CSRFToken
+Flask API (POST /api/scrape)
+        │
         ▼
-[3] Petición principal del perfil
-        │  GET https://www.instagram.com/{username}/?__a=1&__d=dis
-        │  Instagram devuelve JSON con datos del usuario + primeros posts
-        │  Parseamos manualmente el JSON con json.loads()
+Instaloader.context → GET https://www.instagram.com/{username}/
+        │              (con headers y User-Agent de navegador real)
         ▼
-[4] Paginación con GraphQL
-        │  GET https://www.instagram.com/graphql/query/
-        │  Parámetros: query_hash + variables (user_id, first, after)
-        │  'after' es el end_cursor del lote anterior
-        │  Repetimos hasta llegar al número de posts deseado
+Profile.from_username() → parsea el JSON embebido en el HTML
+        │
         ▼
-[5] Serialización
-           Guardamos en /data/{username}_profile.json
+profile.get_posts() → itera publicaciones paginadas
+        │              (añade delay aleatorio entre cada una)
+        ▼
+Serializa a JSON → guarda en /data/{username}_profile.json
+        │
+        ▼
+Frontend recibe y renderiza la data
 ```
 
----
+### ¿Por qué funciona sin API?
 
-## 🔬 Análisis de solicitudes web
+Instagram carga datos del perfil como un objeto JSON dentro del HTML de la página (`window.__additionalDataLoaded`). Instaloader extrae ese JSON directamente haciendo peticiones GET normales, igual que cualquier navegador. Para perfiles **públicos**, no se requiere autenticación.
 
-### ¿Cómo se descubrieron estos endpoints?
+### Uso de Cookies (Sesión)
 
-Usando **Chrome DevTools** (F12 → pestaña Network):
-
-1. Abre Instagram en el navegador
-2. Visita un perfil público
-3. Filtra por `XHR` o `Fetch` en el panel Network
-4. Busca peticiones a `/graphql/query/` o `?__a=1`
-5. Inspecciona headers, cookies y estructura de la respuesta
-
-### Endpoint 1: Perfil (`?__a=1`)
-
-```
-GET https://www.instagram.com/natgeo/?__a=1&__d=dis
-```
-
-| Parámetro | Valor | Significado |
-|-----------|-------|-------------|
-| `__a` | `1` | Solicita respuesta en JSON en vez de HTML |
-| `__d` | `dis` | Desactiva redirecciones internas de IG |
-
-**Estructura del JSON de respuesta:**
-```json
-{
-  "graphql": {
-    "user": {
-      "id": "ID_NUMÉRICO",
-      "username": "natgeo",
-      "full_name": "National Geographic",
-      "biography": "...",
-      "edge_followed_by": { "count": 283000000 },
-      "edge_follow": { "count": 150 },
-      "edge_owner_to_timeline_media": {
-        "count": 32400,
-        "page_info": {
-          "has_next_page": true,
-          "end_cursor": "CURSOR_OPACO_BASE64"
-        },
-        "edges": [ /* primeros 12 posts */ ]
-      }
-    }
-  }
-}
-```
-
-### Endpoint 2: Paginación GraphQL
-
-```
-GET https://www.instagram.com/graphql/query/
-    ?query_hash=e769aa130647d2354c40ea6a439bfc08
-    &variables={"id":"ID","first":12,"after":"CURSOR"}
-```
-
-| Campo | Descripción |
-|-------|-------------|
-| `query_hash` | Hash fijo que identifica la query "ProfilePageContainer" |
-| `id` | User ID obtenido del paso anterior |
-| `first` | Cantidad de posts a traer (máx ~50) |
-| `after` | Cursor de paginación del lote anterior |
-
-### Headers críticos
+Para evitar bloqueos por rate-limiting o acceder a más datos, se puede inyectar una sesión válida:
 
 ```python
-{
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120...",
-    "X-IG-App-ID": "936619743392459",   # ID pública de la webapp de IG
-    "X-CSRFToken": "TOKEN_OBTENIDO",    # Token anti-CSRF
-    "Referer": "https://www.instagram.com/",
-    "X-Requested-With": "XMLHttpRequest",
-}
+# Opción 1: Login con usuario/contraseña (genera archivo de sesión)
+L = instaloader.Instaloader()
+L.login("tu_usuario", "tu_contraseña")
+L.save_session_to_file("session_file")
+
+# Opción 2: Cargar sesión existente
+L.load_session_from_file("session_file")
 ```
 
-El `X-IG-App-ID` es el identificador público de la aplicación web de Instagram. Se obtiene inspeccionando cualquier petición XHR que hace IG desde el navegador.
-
-### Cookies necesarias
-
-Para perfiles públicos, las cookies son **opcionales** pero reducen bloqueos:
-
-| Cookie | Descripción |
-|--------|-------------|
-| `sessionid` | Identifica la sesión autenticada del usuario |
-| `csrftoken` | Token CSRF que debe coincidir con el header |
-| `ds_user_id` | ID numérico del usuario autenticado |
-
-Se obtienen desde Chrome DevTools → Application → Cookies → instagram.com
-
----
-
-## 🛡️ Estrategia anti-bloqueo
-
-Instagram detecta scrapers mediante varios mecanismos. Estas son las contramedidas implementadas:
-
-| Mecanismo de IG | Contramedida implementada |
-|-----------------|---------------------------|
-| Detección de User-Agent de bot | User-Agent idéntico a Chrome 120 real |
-| Rate limiting por IP | `time.sleep(random.uniform(2.0, 4.5))` entre requests |
-| Falta de headers de navegador | Headers completos: Accept, Referer, Sec-Fetch-* |
-| Ausencia de cookies | Extracción automática del csrftoken en primer request |
-| Fingerprinting de la sesión | `requests.Session()` reutiliza la misma sesión TCP |
-| Detección de patrones regulares | Delays **aleatorios** (no fijos) entre peticiones |
+También puedes exportar las cookies de tu navegador con extensiones como **Cookie-Editor** o **EditThisCookie** y cargarlas como diccionario en el contexto de Instaloader.
 
 ---
 
@@ -171,125 +62,131 @@ Instagram detecta scrapers mediante varios mecanismos. Estas son las contramedid
 
 ```
 instagram-scraper/
-│
 ├── backend/
-│   ├── scraper.py     ← Lógica de scraping (solo usa 'requests')
-│   └── app.py         ← API Flask que expone el scraper
-│
+│   └── app.py              # API Flask con lógica de scraping
 ├── frontend/
-│   └── index.html     ← Dashboard visual (HTML/CSS/JS puro)
-│
-├── data/              ← JSONs generados (ignorados por git)
-│   └── .gitkeep
-│
-├── requirements.txt   ← Solo: requests, flask, flask-cors
+│   └── index.html          # Dashboard visual (HTML/CSS/JS puro)
+├── data/                   # JSONs generados (gitignored)
+│   └── {username}_profile.json
+├── requirements.txt
 ├── .gitignore
-├── start.sh           ← Inicio rápido Linux/Mac
-├── start.bat          ← Inicio rápido Windows
 └── README.md
 ```
 
 ---
 
-## 🚀 Instalación y uso
+## 🚀 Instalación y ejecución
 
 ### Prerrequisitos
-- Python 3.8 o superior
+- Python 3.8+
 - pip
 
 ### Pasos
 
 ```bash
-# 1. Clonar
-git clone https://github.com/LeoChicaiza/instagram-scraper.git
+# 1. Clonar el repositorio
+git clone https://github.com/tu-usuario/instagram-scraper.git
 cd instagram-scraper
 
 # 2. Instalar dependencias
 pip install -r requirements.txt
 
-# 3. Correr el backend
+# 3. Iniciar el backend
 python backend/app.py
 
 # 4. Abrir el frontend
-#    Abre frontend/index.html en tu navegador
-#    O usa servidor local:
-python -m http.server 3000 --directory frontend
+#    Abre en tu navegador: frontend/index.html
+#    O usa un servidor local:
+cd frontend && python -m http.server 3000
 ```
 
-### Uso desde línea de comandos (sin frontend)
-
-```bash
-# Scrapear 10 posts del perfil 'natgeo'
-python backend/scraper.py natgeo 10
-
-# Resultado en: data/natgeo_profile.json
-```
+Luego abre `http://localhost:3000` en tu navegador.
 
 ---
 
-## 🔌 API endpoints
+## 🔌 API Endpoints
 
-| Método | Ruta | Body/Params | Descripción |
-|--------|------|-------------|-------------|
-| `POST` | `/api/scrape` | `{username, max_posts, cookies?}` | Scrapea un perfil |
-| `GET` | `/api/profiles` | — | Lista perfiles ya guardados |
-| `GET` | `/api/profile/<user>` | — | Devuelve JSON de perfil guardado |
-| `GET` | `/api/health` | — | Estado del servidor |
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| `POST` | `/api/scrape` | Inicia extracción de un perfil |
+| `GET` | `/api/profiles` | Lista perfiles ya extraídos |
+| `GET` | `/api/profile/{username}` | Devuelve datos de perfil guardado |
+| `GET` | `/api/health` | Estado del servidor |
 
-### Ejemplo cURL
+### Ejemplo de request
 
 ```bash
-# Sin cookies (perfil público)
 curl -X POST http://localhost:5000/api/scrape \
   -H "Content-Type: application/json" \
   -d '{"username": "natgeo", "max_posts": 10}'
+```
 
-# Con cookies de sesión
-curl -X POST http://localhost:5000/api/scrape \
-  -H "Content-Type: application/json" \
-  -d '{
+### Ejemplo de respuesta
+
+```json
+{
+  "success": true,
+  "data": {
     "username": "natgeo",
-    "max_posts": 10,
-    "cookies": {
-      "sessionid": "TU_SESSION_ID",
-      "csrftoken": "TU_CSRF_TOKEN"
-    }
-  }'
+    "full_name": "National Geographic",
+    "biography": "...",
+    "followers": 283000000,
+    "followees": 150,
+    "posts_count": 32400,
+    "is_private": false,
+    "is_verified": true,
+    "scraped_at": "2025-01-15T14:30:00Z",
+    "posts": [
+      {
+        "shortcode": "ABC123",
+        "url": "https://www.instagram.com/p/ABC123/",
+        "date": "2025-01-14T18:00:00",
+        "likes": 84231,
+        "comments": 412,
+        "caption": "...",
+        "media_type": "Image",
+        "thumbnail_url": "https://...",
+        "hashtags": ["nature", "photography"],
+        "mentions": []
+      }
+    ]
+  }
+}
 ```
 
 ---
 
-## ⚠️ Desafíos encontrados
+## 🛡️ Anti-detección implementada
 
-### 1. Cambios frecuentes en la estructura del JSON
-Instagram actualiza su estructura interna sin avisar. La solución fue hacer el parseo defensivo, intentando múltiples rutas en el JSON (`graphql.user`, `data.user`, `user`).
+| Técnica | Implementación |
+|---------|----------------|
+| User-Agent real | `Mozilla/5.0 Chrome/120` |
+| Delays aleatorios | `random.uniform(1.5, 3.0)` segundos entre posts |
+| Sin descarga de media | Solo metadata, no imágenes/videos |
+| Sesión opcional | Carga cookies para simular usuario real |
 
-### 2. Rate limiting agresivo
-Sin autenticación, Instagram bloquea después de pocas peticiones rápidas. Solución: delays aleatorios + session cookies opcionales.
+---
 
-### 3. El endpoint `?__a=1` se deprecó parcialmente
-Instagram comenzó a restringir `?__a=1` para ciertas cuentas. Solución de respaldo: el endpoint GraphQL con `query_hash`.
+## ⚠️ Aviso Legal
 
-### 4. CSRF token obligatorio
-Las peticiones POST/GraphQL requieren el token CSRF. Solución: hacer primero un GET a la homepage para obtenerlo de las cookies de respuesta.
+Este proyecto es **exclusivamente educativo**. El scraping de Instagram puede violar los [Términos de Servicio de Meta](https://help.instagram.com/581066165581870). Úsalo únicamente con fines de aprendizaje sobre web scraping y extracción de datos. No scrapes perfiles privados ni uses los datos con fines comerciales.
 
-### 5. Imágenes con CORS bloqueado
-Los thumbnails de Instagram tienen restricciones CORS en algunos navegadores. Solución: manejo de error en `<img>` con fallback a ícono.
+---
+
+## 👥 Equipo
+
+| Nombre | Rol |
+|--------|-----|
+| — | Backend / Scraping |
+| — | Frontend / UI |
+| — | Documentación |
 
 ---
 
 ## 📦 Dependencias
 
 ```
-requests>=2.31   # HTTP puro — ÚNICA librería de scraping
-flask>=3.0       # Servidor API
-flask-cors>=4.0  # CORS para el frontend
+instaloader>=4.13
+flask>=3.0
+flask-cors>=4.0
 ```
-
-**Ausencia intencional de:** `selenium`, `beautifulsoup4`, `playwright`, `scrapy`, `instaloader`
-
----
-
-## ⚖️ Aviso Legal
-
-Este proyecto es **exclusivamente educativo**, desarrollado para comprender el funcionamiento de las solicitudes HTTP y técnicas de web scraping. El uso de este código para scraping masivo, comercial o sobre perfiles privados puede violar los [Términos de Servicio de Meta](https://help.instagram.com/581066165581870). El autor no se responsabiliza del uso indebido.
