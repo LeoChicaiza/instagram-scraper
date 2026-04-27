@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InstaScope — Instagram Scraper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #090a0e;
+      --bg2:     #0f1117;
+      --bg3:     #161920;
+      --border:  #1e2230;
+      --accent:  #e8ff47;
+      --accent2: #ff5c5c;
+      --green:   #3ddc84;
+      --muted:   #3a3f55;
+      --text:    #dde1f0;
+      --text2:   #7a80a0;
+      --r:       6px;
+      --fh: 'Bebas Neue', sans-serif;
+      --fm: 'DM Mono', monospace;
+      --fb: 'DM Sans', sans-serif;
+    }
+
+    body { background: var(--bg); color: var(--text); font-family: var(--fb); min-height: 100vh; }
+
+    /* noise */
+    body::after {
+      content:''; position:fixed; inset:0; pointer-events:none; z-index:999;
+      background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    }
+
+    /* ── HEADER ── */
+    header {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:18px 40px; border-bottom:1px solid var(--border);
+      background:rgba(9,10,14,0.92); backdrop-filter:blur(10px);
+      position:sticky; top:0; z-index:100;
+    }
+    .logo { display:flex; align-items:center; gap:10px; }
+    .logo-icon {
+      width:28px; height:28px; background:var(--accent); border-radius:6px;
+      display:flex; align-items:center; justify-content:center;
+      font-size:14px; animation: spin-slow 8s linear infinite;
+    }
+    @keyframes spin-slow { to { transform:rotate(360deg); } }
+    .logo-name { font-family:var(--fh); font-size:1.5rem; letter-spacing:3px; }
+    .logo-ver { font-family:var(--fm); font-size:0.6rem; color:var(--muted); margin-left:4px; }
+
+    .header-right { display:flex; gap:12px; align-items:center; }
+    .pill {
+      font-family:var(--fm); font-size:0.62rem; letter-spacing:1px;
+      padding:5px 12px; border-radius:20px;
+      border:1px solid var(--border); color:var(--text2);
+      display:flex; align-items:center; gap:6px;
+    }
+    .dot { width:6px; height:6px; border-radius:50%; }
+    .dot-green { background:var(--green); animation:pulse 2s infinite; }
+    .dot-yellow { background:var(--accent); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ── LAYOUT ── */
+    .page { max-width:1320px; margin:0 auto; padding:40px; }
+
+    /* ── HERO ── */
+    .hero { margin-bottom:48px; }
+    .hero-label { font-family:var(--fm); font-size:0.62rem; color:var(--accent); letter-spacing:3px; text-transform:uppercase; margin-bottom:12px; }
+    .hero-title { font-family:var(--fh); font-size:4rem; line-height:1; letter-spacing:2px; margin-bottom:6px; }
+    .hero-title em { color:var(--accent); font-style:normal; }
+    .hero-sub { font-family:var(--fm); font-size:0.75rem; color:var(--text2); margin-top:10px; }
+
+    /* ── PANELS ── */
+    .panels { display:grid; grid-template-columns:1fr 340px; gap:16px; margin-bottom:40px; }
+
+    .panel {
+      background:var(--bg2); border:1px solid var(--border);
+      border-radius:10px; padding:24px;
+    }
+    .panel-title {
+      font-family:var(--fm); font-size:0.62rem; color:var(--muted);
+      letter-spacing:2px; text-transform:uppercase; margin-bottom:16px;
+      display:flex; align-items:center; gap:8px;
+    }
+    .panel-title::before { content:'//'; color:var(--accent); }
+
+    /* search row */
+    .search-row { display:flex; gap:10px; align-items:center; }
+    .at-wrap { position:relative; flex:1; }
+    .at-sign { position:absolute; left:14px; top:50%; transform:translateY(-50%); font-family:var(--fm); color:var(--accent); font-size:0.9rem; pointer-events:none; }
+    input[type=text] {
+      width:100%; background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--r); color:var(--text); font-family:var(--fm);
+      font-size:0.9rem; padding:12px 12px 12px 32px; outline:none;
+      transition:border-color .2s;
+    }
+    input[type=text]:focus { border-color:var(--accent); }
+    input[type=text]::placeholder { color:var(--muted); }
+    select {
+      background:var(--bg3); border:1px solid var(--border); border-radius:var(--r);
+      color:var(--text2); font-family:var(--fm); font-size:0.75rem;
+      padding:12px 10px; outline:none; cursor:pointer;
+    }
+    .btn {
+      font-family:var(--fh); font-size:0.9rem; letter-spacing:2px;
+      border:none; border-radius:var(--r); padding:12px 24px;
+      cursor:pointer; transition:transform .15s, opacity .15s; white-space:nowrap;
+    }
+    .btn-primary { background:var(--accent); color:#090a0e; }
+    .btn-primary:hover { opacity:.85; transform:translateY(-1px); }
+    .btn-primary:disabled { opacity:.3; cursor:not-allowed; transform:none; }
+    .btn-ghost {
+      background:transparent; color:var(--text2);
+      border:1px solid var(--border); font-size:0.7rem;
+    }
+    .btn-ghost:hover { border-color:var(--accent); color:var(--accent); }
+
+    /* status */
+    #status-area { margin-top:14px; display:none; }
+    .status-row {
+      display:flex; align-items:center; gap:10px;
+      font-family:var(--fm); font-size:0.75rem; color:var(--text2);
+    }
+    .spinner {
+      width:13px; height:13px; border:2px solid var(--border);
+      border-top-color:var(--accent); border-radius:50%;
+      animation:spin .7s linear infinite; flex-shrink:0;
+    }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .err { color:var(--accent2); }
+
+    /* cookies panel */
+    .cookies-hint {
+      font-family:var(--fm); font-size:0.7rem; color:var(--text2);
+      line-height:1.6; margin-bottom:12px;
+    }
+    .cookies-hint code {
+      background:var(--bg3); border:1px solid var(--border);
+      border-radius:3px; padding:1px 6px; font-size:0.65rem; color:var(--accent);
+    }
+    .cookies-fields { display:flex; flex-direction:column; gap:8px; }
+    .field-label { font-family:var(--fm); font-size:0.6rem; color:var(--muted); letter-spacing:1px; margin-bottom:3px; }
+    .cookie-input {
+      width:100%; background:var(--bg3); border:1px solid var(--border);
+      border-radius:var(--r); color:var(--text); font-family:var(--fm);
+      font-size:0.72rem; padding:9px 12px; outline:none; transition:border-color .2s;
+    }
+    .cookie-input:focus { border-color:var(--accent); }
+    .cookie-input::placeholder { color:var(--muted); opacity:.5; }
+    .cookies-note {
+      font-family:var(--fm); font-size:0.6rem; color:var(--muted);
+      margin-top:10px; line-height:1.5;
+    }
+
+    /* ── DIVIDER ── */
+    hr { border:none; border-top:1px solid var(--border); margin:40px 0; }
+
+    /* ── PROFILE RESULT ── */
+    #result { display:none; }
+
+    .profile-card {
+      display:grid; grid-template-columns:80px 1fr auto;
+      gap:24px; align-items:center;
+      background:var(--bg2); border:1px solid var(--border);
+      border-radius:12px; padding:28px 32px; margin-bottom:24px;
+      position:relative; overflow:hidden;
+    }
+    .profile-card::before {
+      content:''; position:absolute; top:-80px; right:-80px;
+      width:220px; height:220px;
+      background:radial-gradient(circle, rgba(232,255,71,.06) 0%, transparent 70%);
+      pointer-events:none;
+    }
+    .avatar {
+      width:80px; height:80px; border-radius:50%; object-fit:cover;
+      border:2px solid var(--accent);
+    }
+    .avatar-ph {
+      width:80px; height:80px; border-radius:50%;
+      background:var(--bg3); border:2px solid var(--border);
+      display:flex; align-items:center; justify-content:center; font-size:1.8rem;
+    }
+    .pname { font-family:var(--fh); font-size:2rem; letter-spacing:1px; line-height:1; }
+    .phandle { font-family:var(--fm); font-size:0.72rem; color:var(--accent); margin:4px 0 8px; }
+    .pbio { font-size:0.82rem; color:var(--text2); max-width:480px; line-height:1.55; }
+    .pbadges { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+    .badge {
+      font-family:var(--fm); font-size:0.58rem; letter-spacing:1px;
+      padding:3px 10px; border-radius:20px; text-transform:uppercase;
+    }
+    .b-verified { background:rgba(232,255,71,.12); color:var(--accent); border:1px solid rgba(232,255,71,.25); }
+    .b-public   { background:rgba(61,220,132,.1);  color:var(--green);  border:1px solid rgba(61,220,132,.2); }
+    .b-private  { background:rgba(255,92,92,.1);   color:var(--accent2);border:1px solid rgba(255,92,92,.2); }
+
+    .profile-actions { display:flex; flex-direction:column; gap:8px; }
+
+    /* stats */
+    .stats {
+      display:grid; grid-template-columns:repeat(4,1fr);
+      gap:1px; background:var(--border);
+      border-radius:10px; overflow:hidden; margin-bottom:32px;
+    }
+    .stat { background:var(--bg2); padding:22px 16px; text-align:center; }
+    .stat-val { font-family:var(--fh); font-size:1.9rem; letter-spacing:1px; }
+    .stat-lbl { font-family:var(--fm); font-size:0.58rem; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin-top:4px; }
+
+    /* posts */
+    .posts-bar {
+      display:flex; justify-content:space-between; align-items:baseline;
+      margin-bottom:18px;
+    }
+    .posts-bar h2 { font-family:var(--fh); font-size:1.5rem; letter-spacing:1px; }
+    .posts-bar span { font-family:var(--fm); font-size:0.65rem; color:var(--muted); }
+
+    .grid {
+      display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+      gap:14px;
+    }
+    .card {
+      background:var(--bg2); border:1px solid var(--border);
+      border-radius:10px; overflow:hidden;
+      transition:border-color .2s, transform .2s;
+      animation:fadeUp .35s ease both;
+    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:none} }
+    .card:hover { border-color:var(--accent); transform:translateY(-2px); }
+
+    .thumb { width:100%; aspect-ratio:1; object-fit:cover; background:var(--bg3); display:block; }
+    .thumb-ph {
+      width:100%; aspect-ratio:1; background:var(--bg3);
+      display:flex; align-items:center; justify-content:center;
+      font-size:2.5rem; color:var(--muted);
+    }
+    .card-body { padding:14px; }
+    .card-meta { display:flex; justify-content:space-between; margin-bottom:8px; }
+    .card-date { font-family:var(--fm); font-size:0.6rem; color:var(--muted); }
+    .card-type { font-family:var(--fm); font-size:0.58rem; padding:2px 8px; border-radius:20px; background:var(--bg3); color:var(--text2); border:1px solid var(--border); }
+    .card-stats { display:flex; gap:14px; margin-bottom:8px; }
+    .cstat { font-family:var(--fm); font-size:0.72rem; color:var(--text2); display:flex; align-items:center; gap:4px; }
+    .card-caption { font-size:0.77rem; color:var(--text2); line-height:1.5; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+    .card-tags { display:flex; flex-wrap:wrap; gap:4px; margin-top:8px; }
+    .tag { font-family:var(--fm); font-size:0.58rem; color:var(--accent); background:rgba(232,255,71,.07); padding:2px 8px; border-radius:20px; }
+    .card-link { display:inline-block; margin-top:10px; font-family:var(--fm); font-size:0.62rem; color:var(--text2); text-decoration:none; border:1px solid var(--border); border-radius:4px; padding:4px 10px; transition:border-color .2s,color .2s; }
+    .card-link:hover { border-color:var(--accent); color:var(--accent); }
+
+    /* json dump */
+    .json-wrap { margin-top:40px; }
+    .json-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .json-bar .section-label { font-family:var(--fm); font-size:0.62rem; color:var(--accent); letter-spacing:3px; text-transform:uppercase; }
+    pre#json-out {
+      background:var(--bg2); border:1px solid var(--border);
+      border-radius:10px; padding:22px; font-family:var(--fm); font-size:0.68rem;
+      color:var(--text2); overflow:auto; max-height:360px; line-height:1.7;
+    }
+
+    /* footer */
+    footer {
+      text-align:center; padding:28px; border-top:1px solid var(--border);
+      font-family:var(--fm); font-size:0.6rem; color:var(--muted); letter-spacing:1px;
+    }
+
+    @media(max-width:900px){
+      .panels { grid-template-columns:1fr; }
+      .page { padding:20px; }
+      header { padding:14px 20px; }
+      .hero-title { font-size:2.6rem; }
+      .stats { grid-template-columns:repeat(2,1fr); }
+      .profile-card { grid-template-columns:60px 1fr; }
+      .profile-actions { display:none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">◈</div>
+    <span class="logo-name">INSTASCOPE</span>
+    <span class="logo-ver">v2.0</span>
+  </div>
+  <div class="header-right">
+    <div class="pill"><div class="dot dot-yellow"></div>SIN API OFICIAL</div>
+    <div class="pill"><div class="dot dot-green"></div>REQUESTS PUROS</div>
+  </div>
+</header>
+
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <p class="hero-label">// web scraping educativo</p>
+    <h1 class="hero-title">Extrae datos de<br>Instagram <em>sin API</em></h1>
+    <p class="hero-sub">HTTP puro · Sin Selenium · Sin BeautifulSoup · Análisis de endpoints reales</p>
+  </div>
+
+  <!-- PANELS -->
+  <div class="panels">
+
+    <!-- LEFT: search -->
+    <div class="panel">
+      <p class="panel-title">búsqueda de perfil</p>
+      <div class="search-row">
+        <div class="at-wrap">
+          <span class="at-sign">@</span>
+          <input type="text" id="inp-user" placeholder="username" autocomplete="off" spellcheck="false" />
+        </div>
+        <select id="inp-count">
+          <option value="10">10 posts</option>
+          <option value="15">15 posts</option>
+          <option value="20">20 posts</option>
+          <option value="30">30 posts</option>
+        </select>
+        <button class="btn btn-primary" id="btn-go" onclick="runScrape()">SCRAPE</button>
+      </div>
+
+      <div id="status-area">
+        <div class="status-row" id="status-row">
+          <div class="spinner"></div>
+          <span id="status-txt">Iniciando...</span>
+        </div>
+      </div>
+
+      <!-- HOW IT WORKS mini -->
+      <div style="margin-top:22px; padding-top:18px; border-top:1px solid var(--border);">
+        <p class="panel-title" style="margin-bottom:10px;">cómo funciona</p>
+        <div style="font-family:var(--fm); font-size:0.68rem; color:var(--text2); line-height:1.9;">
+          <span style="color:var(--accent)">1.</span> GET <code style="color:var(--text); background:var(--bg3); padding:1px 5px; border-radius:3px;">/{user}/?__a=1&__d=dis</code> → JSON del perfil<br>
+          <span style="color:var(--accent)">2.</span> Parseo manual del JSON sin BeautifulSoup<br>
+          <span style="color:var(--accent)">3.</span> Paginación vía endpoint GraphQL interno<br>
+          <span style="color:var(--accent)">4.</span> Headers Chrome + delays aleatorios anti-bloqueo<br>
+          <span style="color:var(--accent)">5.</span> Cookies opcionales para sesión autenticada
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT: cookies -->
+    <div class="panel">
+      <p class="panel-title">cookies de sesión <span style="color:var(--muted)">(opcional)</span></p>
+      <p class="cookies-hint">
+        Para evitar rate-limiting, pega tus cookies de Instagram.<br>
+        Cómo obtenerlas: abre Instagram en Chrome →
+        <code>F12</code> → <code>Application</code> → <code>Cookies</code>
+      </p>
+      <div class="cookies-fields">
+        <div>
+          <p class="field-label">sessionid</p>
+          <input class="cookie-input" id="c-sessionid" type="password" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+        </div>
+        <div>
+          <p class="field-label">csrftoken</p>
+          <input class="cookie-input" id="c-csrftoken" type="text" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+        </div>
+        <div>
+          <p class="field-label">ds_user_id</p>
+          <input class="cookie-input" id="c-dsuserid" type="text" placeholder="123456789" />
+        </div>
+      </div>
+      <p class="cookies-note">⚠ Las cookies nunca se envían a terceros.<br>Se usan localmente solo para la petición HTTP.</p>
+    </div>
+
+  </div><!-- /panels -->
+
+  <hr />
+
+  <!-- RESULT -->
+  <div id="result">
+
+    <!-- Profile card -->
+    <div class="profile-card" id="profile-card"></div>
+
+    <!-- Stats -->
+    <div class="stats" id="stats"></div>
+
+    <!-- Posts -->
+    <div class="posts-bar">
+      <h2>PUBLICACIONES</h2>
+      <span id="posts-label"></span>
+    </div>
+    <div class="grid" id="posts-grid"></div>
+
+    <!-- JSON -->
+    <div class="json-wrap">
+      <div class="json-bar">
+        <span class="section-label">raw json</span>
+        <button class="btn btn-ghost" onclick="copyJSON()">COPIAR JSON</button>
+      </div>
+      <pre id="json-out"></pre>
+    </div>
+
+  </div><!-- /result -->
+
+</div><!-- /page -->
+
+<footer>INSTASCOPE · USO EDUCATIVO · SIN AFILIACIÓN CON META / INSTAGRAM</footer>
+
+<script>
+  const API = 'http://localhost:5000';
+  let _data = null;
+
+  const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'M' : n >= 1e3 ? (n/1e3).toFixed(1)+'K' : (n||0).toLocaleString();
+  const fmtDate = iso => new Date(iso).toLocaleDateString('es-EC',{year:'numeric',month:'short',day:'numeric'});
+
+  function setStatus(msg, isErr=false) {
+    const a = document.getElementById('status-area');
+    const r = document.getElementById('status-row');
+    const t = document.getElementById('status-txt');
+    a.style.display = 'block';
+    t.textContent = msg;
+    r.className = 'status-row' + (isErr ? ' err' : '');
+    if (isErr) { const s = r.querySelector('.spinner'); if(s) s.remove(); }
+  }
+
+  function getCookies() {
+    const s = document.getElementById('c-sessionid').value.trim();
+    const c = document.getElementById('c-csrftoken').value.trim();
+    const d = document.getElementById('c-dsuserid').value.trim();
+    if (!s && !c && !d) return null;
+    const obj = {};
+    if (s) obj.sessionid = s;
+    if (c) obj.csrftoken = c;
+    if (d) obj.ds_user_id = d;
+    return obj;
+  }
+
+  async function runScrape() {
+    const user = document.getElementById('inp-user').value.trim().replace('@','');
+    const max  = document.getElementById('inp-count').value;
+    if (!user) return;
+
+    const btn = document.getElementById('btn-go');
+    btn.disabled = true;
+    document.getElementById('result').style.display = 'none';
+    document.getElementById('status-area').style.display = 'block';
+    document.getElementById('status-row').innerHTML =
+      `<div class="spinner"></div><span id="status-txt">Extrayendo @${user}… (puede tomar ~30s)</span>`;
+
+    try {
+      const res = await fetch(`${API}/api/scrape`, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username:user, max_posts:parseInt(max), cookies:getCookies() })
+      });
+      const json = await res.json();
+
+      if (!json.success) { setStatus('✗ '+json.error, true); btn.disabled=false; return; }
+
+      setStatus(`✓ Listo · ${json.data.posts_retrieved} publicaciones extraídas`);
+      document.getElementById('status-row').querySelector('.spinner')?.remove();
+      renderAll(json.data);
+      btn.disabled = false;
+
+    } catch(e) {
+      setStatus('✗ No se pudo conectar con la API. ¿Corriste python backend/app.py?', true);
+      btn.disabled = false;
+    }
+  }
+
+  function renderAll(d) {
+    _data = d;
+    document.getElementById('result').style.display = 'block';
+
+    // Profile card
+    const pic = d.profile_pic_url
+      ? `<img class="avatar" src="${d.profile_pic_url}" onerror="this.outerHTML='<div class=avatar-ph>👤</div>'" />`
+      : `<div class="avatar-ph">👤</div>`;
+
+    const badges = [
+      d.is_verified ? `<span class="badge b-verified">✓ Verificado</span>` : '',
+      d.is_private  ? `<span class="badge b-private">🔒 Privado</span>` : `<span class="badge b-public">◉ Público</span>`,
+    ].join('');
+
+    document.getElementById('profile-card').innerHTML = `
+      ${pic}
+      <div>
+        <div class="pname">${d.full_name || d.username}</div>
+        <div class="phandle">@${d.username}</div>
+        ${d.biography ? `<div class="pbio">${d.biography}</div>` : ''}
+        <div class="pbadges">${badges}</div>
+      </div>
+      <div class="profile-actions">
+        <button class="btn btn-ghost" onclick="copyJSON()">COPIAR JSON</button>
+        <button class="btn btn-ghost" onclick="downloadJSON()">DESCARGAR</button>
+      </div>
+    `;
+
+    // Stats
+    document.getElementById('stats').innerHTML = `
+      <div class="stat"><div class="stat-val">${fmt(d.followers)}</div><div class="stat-lbl">Seguidores</div></div>
+      <div class="stat"><div class="stat-val">${fmt(d.followees)}</div><div class="stat-lbl">Siguiendo</div></div>
+      <div class="stat"><div class="stat-val">${fmt(d.posts_count)}</div><div class="stat-lbl">Total Posts</div></div>
+      <div class="stat"><div class="stat-val">${d.posts_retrieved}</div><div class="stat-lbl">Extraídos</div></div>
+    `;
+
+    // Posts
+    document.getElementById('posts-label').textContent = d.posts.length + ' publicaciones';
+    const grid = document.getElementById('posts-grid');
+    grid.innerHTML = '';
+    d.posts.forEach((p, i) => {
+      const tags = p.hashtags.slice(0,5).map(t=>`<span class="tag">#${t}</span>`).join('');
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.style.animationDelay = (i*.05)+'s';
+
+      const thumb = p.thumbnail_url
+        ? `<img class="thumb" src="${p.thumbnail_url}" loading="lazy" onerror="this.outerHTML='<div class=thumb-ph>${p.media_type==='Video'?'▶':'🖼'}</div>'" />`
+        : `<div class="thumb-ph">${p.media_type==='Video'?'▶':'🖼'}</div>`;
+
+      card.innerHTML = `
+        ${thumb}
+        <div class="card-body">
+          <div class="card-meta">
+            <span class="card-date">${fmtDate(p.date_iso)}</span>
+            <span class="card-type">${p.media_type}</span>
+          </div>
+          <div class="card-stats">
+            <span class="cstat">♥ ${fmt(p.likes)}</span>
+            <span class="cstat">💬 ${fmt(p.comments)}</span>
+            ${p.location ? `<span class="cstat">📍 ${p.location}</span>` : ''}
+          </div>
+          ${p.caption ? `<p class="card-caption">${p.caption}</p>` : ''}
+          ${tags ? `<div class="card-tags">${tags}</div>` : ''}
+          <a class="card-link" href="${p.url}" target="_blank" rel="noopener">↗ Ver en Instagram</a>
+        </div>
+      `;
+      grid.appendChild(card);
+    });
+
+    // JSON
+    document.getElementById('json-out').textContent = JSON.stringify(d, null, 2);
+    document.getElementById('result').scrollIntoView({ behavior:'smooth', block:'start' });
+  }
+
+  function copyJSON() {
+    if (!_data) return;
+    navigator.clipboard.writeText(JSON.stringify(_data, null, 2)).then(() => {
+      const b = document.querySelector('[onclick="copyJSON()"]');
+      const orig = b.textContent;
+      b.textContent = '✓ COPIADO';
+      setTimeout(() => b.textContent = orig, 2000);
+    });
+  }
+
+  function downloadJSON() {
+    if (!_data) return;
+    const blob = new Blob([JSON.stringify(_data, null, 2)], {type:'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${_data.username}_instagram.json`;
+    a.click();
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('inp-user').addEventListener('keydown', e => {
+      if (e.key === 'Enter') runScrape();
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Datos extraídos — nunca subir al repo
+data/*.json
+
+# Sesiones/cookies de Instagram — NUNCA subir
+session_*
+*.session
+cookies.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
